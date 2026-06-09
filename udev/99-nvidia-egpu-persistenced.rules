@@ -1,0 +1,28 @@
+# udev rules: start/stop nvidia-persistenced when an NVIDIA display device
+# appears or disappears on the PCI bus.
+#
+# Why: on an eGPU setup, nvidia-persistenced cannot start until the GPU is
+# plugged in. These rules wire its lifecycle to the actual presence of the
+# device, so the user just plugs the cable and it works (no manual
+# `systemctl reset-failed && start` after each plug).
+#
+# Coupled with systemd/nvidia-persistenced.service.d/override.conf which
+# makes the service no-op at boot when no GPU is present.
+#
+# Install destination: /etc/udev/rules.d/99-nvidia-egpu-persistenced.rules
+# Apply with: sudo udevadm control --reload && sudo udevadm trigger
+#
+# Matching:
+#   PCI_CLASS == 30000   → VGA compatible controller (consumer cards: RTX 30xx, 40xx)
+#   PCI_CLASS == 30200   → 3D controller (workstation: A4000, A6000, etc.)
+#   PCI_ID    == 10DE:*  → any NVIDIA device
+
+ACTION=="add", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30000", ENV{PCI_ID}=="10DE:*", \
+    RUN+="/usr/bin/systemctl --no-block start nvidia-persistenced.service"
+ACTION=="add", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30200", ENV{PCI_ID}=="10DE:*", \
+    RUN+="/usr/bin/systemctl --no-block start nvidia-persistenced.service"
+
+ACTION=="remove", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30000", ENV{PCI_ID}=="10DE:*", \
+    RUN+="/usr/bin/systemctl --no-block stop nvidia-persistenced.service"
+ACTION=="remove", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30200", ENV{PCI_ID}=="10DE:*", \
+    RUN+="/usr/bin/systemctl --no-block stop nvidia-persistenced.service"

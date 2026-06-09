@@ -1,0 +1,14 @@
+# Local build artifacts
+*.o
+*.fatbin
+
+# Editor swap/backup
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
