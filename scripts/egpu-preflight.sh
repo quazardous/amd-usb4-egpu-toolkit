@@ -106,6 +106,16 @@ else
     fail "nvidia-persistenced.service not enabled — run: sudo systemctl enable nvidia-persistenced"
 fi
 
+if [[ -f /etc/systemd/system/nvidia-egpu-shutdown.service ]]; then
+    if systemctl is-enabled nvidia-egpu-shutdown.service &>/dev/null; then
+        ok "nvidia-egpu-shutdown.service enabled (cleans up nvidia.ko before poweroff)"
+    else
+        warn "nvidia-egpu-shutdown.service installed but not enabled — run: sudo systemctl enable nvidia-egpu-shutdown.service"
+    fi
+else
+    warn "nvidia-egpu-shutdown.service not installed — shutdown may hang. Run setup-compute.sh."
+fi
+
 # ============================================================
 hdr "Clean state (no leftover from previous session)"
 # ============================================================

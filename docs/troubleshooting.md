@@ -14,6 +14,7 @@ Map your symptom to the right action. `Verdict` column refers to `./scripts/egpu
 | `nvidia-persistenced` keeps failing | `persistenced: inactive` | The udev rule should auto‑start it on plug. If it doesn't, check `journalctl -u nvidia-persistenced` and `udevadm monitor` while plugging. |
 | Whole system freezes when unplugging eGPU | (cascade) | Held NVRM spinlock. Hard reset. If it happens repeatedly, you may have nouveau loading — ensure blacklist + initramfs regen. |
 | `udev` rule not firing on plug | (check `udevadm test`) | See [Testing the udev rule](#testing-the-udev-rule) below. |
+| Shutdown / poweroff hangs at the spinner | (n/a — happens post‑boot) | The `nvidia-egpu-shutdown.service` hook isn't installed or enabled. See [Shutdown hangs](#shutdown-hangs-at-poweroff) below. |
 
 ## Testing the udev rule
 
@@ -39,6 +40,33 @@ sudo udevadm trigger --action=add "$GPU_SYSFS"
 sleep 2
 systemctl is-active nvidia-persistenced.service          # active
 ```
+
+## Shutdown hangs at poweroff
+
+Symptom: `sudo poweroff` (or shutdown via the GUI) gets stuck on the Fedora/distro spinner. Eventually the watchdog reboots the laptop, or the user holds the power button.
+
+Root cause: when `nvidia-persistenced` is stopped during shutdown, nvidia.ko's refcount drops, but the module may still hold references via subsystems that haven't been torn down yet. systemd then unloads modules in some order; if the TB stack starts removing the GPU's PCI device while nvidia hasn't finished its `.remove()` callback, the same NVRM lockup pattern as during a hot‑unplug fires — but in the middle of shutdown, where there's nowhere to go and no user input to react.
+
+Fix: the toolkit installs a `nvidia-egpu-shutdown.service` shutdown hook that:
+
+1. Stops `nvidia-persistenced` cleanly (releases `/dev/nvidia0`)
+2. Unloads `nvidia_uvm` (with a 5s timeout)
+3. Unloads `nvidia` itself (with a 10s timeout)
+
+All this happens *before* `shutdown.target` is reached, so the TB stack tears down cleanly after the driver is already gone. If any step times out (because the driver is already in a stuck state), the hook gives up and lets systemd proceed — the goal is to make the *common* case smooth, not magically rescue a broken state.
+
+To verify the hook is enabled:
+```bash
+systemctl is-enabled nvidia-egpu-shutdown.service   # → enabled
+```
+
+To see its logs after a shutdown:
+```bash
+journalctl -u nvidia-egpu-shutdown.service -b -1    # previous boot
+journalctl -t nvidia-egpu-shutdown -b -1            # the helper's syslog messages
+```
+
+If it's missing, re‑run `setup-compute.sh` — it installs the service file, the helper script, and enables the unit.
 
 ## Recovering from the cascade without reboot
 

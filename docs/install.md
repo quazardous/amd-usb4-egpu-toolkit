@@ -56,7 +56,9 @@ What it does (all idempotent):
 - writes `/etc/modprobe.d/nvidia-compute-only.conf` (blacklist `nvidia-drm` + `nvidia-modeset`)
 - writes `/etc/udev/rules.d/99-nvidia-egpu-persistenced.rules` (auto start/stop on PCI add/remove)
 - writes `/etc/systemd/system/nvidia-persistenced.service.d/override.conf` (eGPU‑aware drop‑in)
+- writes `/etc/systemd/system/nvidia-egpu-shutdown.service` + `/usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh` (avoids shutdown freezes)
 - `systemctl daemon-reload` + `udevadm control --reload`
+- enables `nvidia-egpu-shutdown.service`
 - regenerates initramfs — auto‑detects `dracut` / `update-initramfs` / `mkinitcpio`
 - prints the kernel‑cmdline instructions specific to your bootloader
 

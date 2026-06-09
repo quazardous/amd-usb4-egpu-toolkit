@@ -1,0 +1,36 @@
+# Shutdown hook that cleanly tears down the NVIDIA eGPU before systemd
+# starts unmounting filesystems and removing the Thunderbolt stack.
+#
+# Without this hook, shutdown sometimes hangs because:
+#   - nvidia-persistenced is still holding /dev/nvidia0 → nvidia.ko has refs
+#   - systemd unloads nvidia.ko while it still has refs → driver state
+#     becomes inconsistent → the TB stack starts removing the GPU's PCI
+#     device while nvidia hasn't finished its .remove() callback → the
+#     usual NVRM lockup pattern but at shutdown time, leaving the spinner
+#     spinning until the watchdog times out.
+#
+# This hook does NOT do anything at startup — it only runs at shutdown,
+# via the standard "ExecStop after Conflicts=shutdown.target" pattern.
+#
+# Install destination: /etc/systemd/system/nvidia-egpu-shutdown.service
+# Enable with:        sudo systemctl enable nvidia-egpu-shutdown.service
+
+[Unit]
+Description=Clean up NVIDIA eGPU before shutdown
+DefaultDependencies=no
+After=multi-user.target
+Before=shutdown.target final.target
+Conflicts=reboot.target poweroff.target halt.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+# If the eGPU is already in a bad state, the helper itself can hang.
+# A generous timeout lets the unload attempt complete in the common case;
+# in the worst case systemd kills us and proceeds with shutdown.
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=multi-user.target

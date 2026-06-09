@@ -72,12 +72,10 @@ sudo reboot
 
 Then physically:
 
-```
 1. eGPU enclosure: POWER OFF
 2. Plug USB4 cable into the laptop
 3. Power on the enclosure
 4. Wait ~10s for NVRM init + GSP bootstrap
-```
 
 Then verify:
 
@@ -113,6 +111,7 @@ Common scenarios and how to fix them — full tree + glossary in [docs/troublesh
 | Verdict reports `BUG-Gen1-AMD-Phoenix` | Phoenix x1‑Gen1 bug fired. Power‑cycle the enclosure and re‑plug. |
 | `nvidia-persistenced` keeps failing at boot | Drop-in missing. Re‑run `setup-compute.sh`, reboot. |
 | Preflight reports `nvidia-persistenced failed N time(s) since boot` | Stale journal traces from before the fix. Reboot to clear the count. |
+| Shutdown / poweroff hangs at the Fedora spinner | `nvidia-egpu-shutdown.service` missing or disabled. Re‑run `setup-compute.sh` (it installs + enables the hook that cleanly unloads nvidia.ko before TB teardown). |
 
 To recover from a cascade (D-state `nvidia-smi`, system partially deadlocked):
 ```bash

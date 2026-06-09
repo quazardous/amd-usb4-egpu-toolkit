@@ -182,10 +182,33 @@ EOF
     write_root_file "$REPO_DIR/systemd/nvidia-persistenced.service.d/override.conf" \
                     /etc/systemd/system/nvidia-persistenced.service.d/override.conf
 
+    # Shutdown helper: cleanly stops persistenced + unloads nvidia.ko before
+    # systemd starts tearing down the TB stack. Avoids the "shutdown spinner
+    # hangs" pattern observed when nvidia.ko has refs at module-unload time.
+    sudo install -d -m 0755 /usr/local/lib/amd-usb4-egpu-toolkit
+    write_root_file "$REPO_DIR/scripts/shutdown-helper.sh" \
+                    /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+    sudo chmod +x /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+    write_root_file "$REPO_DIR/systemd/nvidia-egpu-shutdown.service" \
+                    /etc/systemd/system/nvidia-egpu-shutdown.service
+
     log "Reloading systemd + udev rules..."
     sudo systemctl daemon-reload
     sudo udevadm control --reload
     ok "systemd + udev reloaded"
+
+    # Enable the shutdown hook so its ExecStop runs on every poweroff/reboot.
+    if ! systemctl is-enabled nvidia-egpu-shutdown.service &>/dev/null; then
+        log "Enabling nvidia-egpu-shutdown.service..."
+        if confirm "  Enable nvidia-egpu-shutdown.service?"; then
+            sudo systemctl enable nvidia-egpu-shutdown.service
+            ok "nvidia-egpu-shutdown.service enabled"
+        else
+            warn "Skipped — enable manually with: sudo systemctl enable nvidia-egpu-shutdown.service"
+        fi
+    else
+        ok "nvidia-egpu-shutdown.service already enabled"
+    fi
 
     regen_initramfs
 
@@ -203,6 +226,15 @@ EOF
 # ---------- uninstall ----------
 do_uninstall() {
     log "Removing AMD/USB4 eGPU compute-only configuration"
+    # Disable the shutdown hook first so removal of its files doesn't leave a
+    # dangling enable-symlink.
+    if systemctl is-enabled nvidia-egpu-shutdown.service &>/dev/null; then
+        log "Disabling nvidia-egpu-shutdown.service..."
+        sudo systemctl disable nvidia-egpu-shutdown.service
+    fi
+    remove_if_present /etc/systemd/system/nvidia-egpu-shutdown.service
+    remove_if_present /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+    sudo rmdir /usr/local/lib/amd-usb4-egpu-toolkit 2>/dev/null || true
     remove_if_present /etc/modprobe.d/blacklist-nouveau.conf
     remove_if_present /etc/modprobe.d/nvidia-compute-only.conf
     remove_if_present /etc/udev/rules.d/99-nvidia-egpu-persistenced.rules
