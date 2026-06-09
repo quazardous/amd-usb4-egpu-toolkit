@@ -24,6 +24,26 @@ set -u
 
 LOG() { logger -t nvidia-egpu-shutdown "$@"; }
 
+# Lesson from the 2026-06-09 hung shutdown: if there are already D-state
+# nvidia processes when shutdown starts, `modprobe -r nvidia*` will also
+# enter D state on the same kernel spinlock. `timeout` cannot kill a process
+# in uninterruptible kernel sleep — neither can SIGTERM, SIGKILL, or
+# systemd's final-watchdog. The kernel keeps the modprobe alive, systemd
+# eventually unblocks but the rest of shutdown freezes anyway.
+#
+# So: detect the bad state up front and EXIT EARLY without attempting any
+# unload. The shutdown will still likely hang on the final module-unload
+# step, but we won't have added our own contribution to the pile of stuck
+# processes — and the journal will clearly show that we knew and skipped.
+stuck_count=$(ps -eo stat,cmd 2>/dev/null | awk '/^D/ && /nvidia/ {n++} END {print n+0}')
+if [[ "${stuck_count:-0}" -gt 0 ]]; then
+    LOG "ABORTING: $stuck_count nvidia process(es) already in D state — driver is stuck."
+    LOG "         Any modprobe -r would also deadlock on the same spinlock."
+    LOG "         Shutdown will probably need a hard power-cycle (driver bug)."
+    LOG "         No unload attempted. See egpu-postmortem.sh after next boot."
+    exit 0
+fi
+
 unload_with_timeout() {
     local module="$1"
     local timeout_s="${2:-5}"
@@ -32,7 +52,10 @@ unload_with_timeout() {
         LOG "$module unloaded cleanly"
         return 0
     else
-        LOG "$module unload timed out or failed (driver likely stuck — giving up)"
+        # `timeout` returned non-zero → either the deadline hit (and we sent
+        # SIGTERM/SIGKILL, but if modprobe is in D state those are ignored)
+        # or modprobe exited with an error. Either way: stop trying.
+        LOG "$module unload failed or timed out (driver likely stuck — not retrying)"
         return 1
     fi
 }
@@ -53,9 +76,14 @@ if ! lsmod | grep -q '^nvidia '; then
     exit 0
 fi
 
-# 3. Unload nvidia_uvm first (depends on nvidia.ko)
+# 3. Unload nvidia_uvm first (depends on nvidia.ko). If this hangs, we bail
+#    instead of also trying nvidia — piling a second stuck modprobe just
+#    makes the shutdown timeout worse.
 if lsmod | grep -q '^nvidia_uvm'; then
-    unload_with_timeout nvidia_uvm 5
+    if ! unload_with_timeout nvidia_uvm 5; then
+        LOG "skipping nvidia.ko unload because nvidia_uvm was stuck"
+        exit 0
+    fi
 fi
 
 # 4. Unload nvidia.ko
