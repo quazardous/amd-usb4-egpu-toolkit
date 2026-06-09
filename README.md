@@ -30,7 +30,8 @@ Should also work on Intel USB4 hosts — the persistence/cascade fixes are vendo
 
 ```
 scripts/
-  egpu-diag.sh       passive diagnostic, never touches the driver
+  egpu-preflight.sh  pre-plug readiness check (config in place, no leftover bad state)
+  egpu-diag.sh       passive live diagnostic, never touches the driver
   egpu-stress.sh     deviceQuery + bandwidth + gpu-burn, compute-only safe
   setup-compute.sh   distro-agnostic config (modprobe + udev + drop-in + initramfs)
 udev/                start/stop nvidia-persistenced on PCI add/remove
@@ -60,21 +61,64 @@ sudo grubby --update-kernel=ALL --args="nvidia-drm.modeset=0"
 sudo reboot
 ```
 
-## Plug & verify
+## How to plug
+
+```bash
+# 0. Pre-flight check (verifies everything is ready, no leftover bad state)
+./scripts/egpu-preflight.sh
+# → must say "READY TO PLUG" (or READY WITH WARNINGS reviewed)
+# → if NOT READY: fix listed failures first
+```
+
+Then physically:
 
 ```
-1. Razer enclosure: POWER OFF
-2. Plug USB4 cable into laptop
+1. eGPU enclosure: POWER OFF
+2. Plug USB4 cable into the laptop
 3. Power on the enclosure
-4. Wait ~10s
-
-$ ./scripts/egpu-diag.sh    # → Verdict: OK-Gen4x4, Safe nvidia-smi: YES
-$ nvidia-smi                 # → RTX 3090, Persistence-M: On
+4. Wait ~10s for NVRM init + GSP bootstrap
 ```
 
-Full procedure, verification, benchmark numbers: [docs/procedure.md](docs/procedure.md).
+Then verify:
 
-If `egpu-diag.sh` reports `BUG-Gen1-AMD-Phoenix`, **don't** call `nvidia-smi` yet — power‑cycle the enclosure and re‑plug. Details: [docs/troubleshooting.md](docs/troubleshooting.md).
+```bash
+./scripts/egpu-diag.sh
+# → Verdict: OK-Gen4x4 (USB4) or OK-Gen3x4 (TB3)
+# → Safe nvidia-smi: YES
+
+nvidia-smi
+# → your GPU listed, Persistence-M: On
+```
+
+If `egpu-diag.sh` reports **`BUG-Gen1-AMD-Phoenix`**, do NOT call `nvidia-smi` (cascade risk). Power‑cycle the enclosure and re‑plug — the bug is intermittent and usually clears on a second attempt.
+
+Full procedure, full verification, benchmark reference numbers: [docs/procedure.md](docs/procedure.md).
+
+## Troubleshoot
+
+When something goes wrong, the diagnosis flow is:
+
+```bash
+./scripts/egpu-preflight.sh    # before plug — is the system in a usable state?
+./scripts/egpu-diag.sh         # any time — what's the current link / driver state?
+```
+
+Common scenarios and how to fix them — full tree + glossary in [docs/troubleshooting.md](docs/troubleshooting.md):
+
+| Symptom | First action |
+|---|---|
+| `nvidia-smi` hangs (no output) | **DON'T** run it again. Reboot. See the NVRM cascade explanation. |
+| `nvidia-smi` says "No devices found" while the eGPU is plugged | Driver lost session. Check `nvidia-persistenced` is `active`. Reboot if needed. |
+| Display freezes when eGPU is plugged | `nvidia-drm` is loaded. Re‑run `setup-compute.sh`, reboot. |
+| Verdict reports `BUG-Gen1-AMD-Phoenix` | Phoenix x1‑Gen1 bug fired. Power‑cycle the enclosure and re‑plug. |
+| `nvidia-persistenced` keeps failing at boot | Drop-in missing. Re‑run `setup-compute.sh`, reboot. |
+| Preflight reports `nvidia-persistenced failed N time(s) since boot` | Stale journal traces from before the fix. Reboot to clear the count. |
+
+To recover from a cascade (D-state `nvidia-smi`, system partially deadlocked):
+```bash
+sudo systemctl --force --force reboot
+```
+If that hangs too: switch to a TTY (`Ctrl+Alt+F3`), retry. Last resort: SysRq REISUB or 10s power button.
 
 ## Documentation
 

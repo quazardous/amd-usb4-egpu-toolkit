@@ -4,16 +4,44 @@
 
 Once everything from [install.md](install.md) is in place, **the order of operations matters** for getting a clean PCIe negotiation:
 
+### Step 0 — Preflight (before any plug)
+
+```bash
+./scripts/egpu-preflight.sh
 ```
-1. Boot laptop, desktop fully loaded
-2. eGPU enclosure: POWER OFF
-3. Plug the USB4 cable into the laptop (vendor-supplied short cable preferred)
-4. Power on the eGPU enclosure
-5. Wait ~10 seconds (NVRM init + GSP bootstrap)
-6. Verify with: ./scripts/egpu-diag.sh
-   → Verdict should be OK-Gen4x4 (USB4) or OK-Gen3x4 (TB3)
-   → Safe nvidia-smi: YES
-7. nvidia-smi
+
+This is a read-only check that verifies:
+
+- driver stack is healthy (nvidia.ko not in a stale state, nouveau not loaded)
+- toolkit configuration is applied (blacklists, udev rule, systemd drop-in, kernel cmdline)
+- no leftover state from a previous session that would cause a cascade (no D-state processes, no recent Xid / RmInitAdapter in journal, persistenced not in failed state)
+- Thunderbolt / USB4 stack is up (module loaded, bolt active, IOMMU on)
+- iGPU is driving the display (so the eGPU won't be drafted into the display path)
+- no conflicting kernel args (`pcie_aspm=off`, `pcie_port_pm=off`, legacy `thunderbolt.clx=0`)
+
+Verdict:
+- `READY TO PLUG` — go ahead
+- `READY WITH WARNINGS` — go ahead but review the warnings
+- `NOT READY` — fix listed failures first (most commonly: reboot to clear a stale driver state)
+
+### Step 1 — Plug
+
+```
+1. eGPU enclosure: POWER OFF
+2. Plug the USB4 cable into the laptop (vendor-supplied short cable preferred)
+3. Power on the eGPU enclosure
+4. Wait ~10 seconds (NVRM init + GSP bootstrap)
+```
+
+### Step 2 — Verify
+
+```bash
+./scripts/egpu-diag.sh
+# → Verdict: OK-Gen4x4 (USB4) or OK-Gen3x4 (TB3)
+# → Safe nvidia-smi: YES
+
+nvidia-smi
+# → GPU listed, Persistence-M: On
 ```
 
 If `egpu-diag.sh` reports `BUG-Gen1-AMD-Phoenix`, **don't** invoke `nvidia-smi` yet — the GSP bootstrap will time out and you'll be stuck in the [NVRM cascade](troubleshooting.md#nvrm-cascade-deadlock-after-xid-79). Power‑cycle the eGPU and try again. The bug is intermittent: a second plug after a power cycle often re‑trains the link to Gen4 cleanly.
