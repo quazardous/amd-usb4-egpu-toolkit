@@ -32,10 +32,12 @@ Should also work on Intel USB4 hosts — the persistence/cascade fixes are vendo
 scripts/
   egpu-preflight.sh   pre-plug readiness check (config in place, no leftover bad state)
   egpu-diag.sh        passive live diagnostic, never touches the driver
+  egpu-recover.sh     guided recovery from a stuck driver (cascade, WPR2, etc.)
   egpu-postmortem.sh  retrospective analysis: per-boot summary + detail mode
   egpu-stress.sh      deviceQuery + bandwidth + gpu-burn, compute-only safe
   setup-compute.sh    distro-agnostic config (modprobe + udev + drop-in + initramfs)
   shutdown-helper.sh  shutdown-time eGPU teardown (installed in /usr/local/lib)
+  gsp-off.sh          opt-in workaround: disable NVIDIA GSP firmware (closed driver only)
 udev/                 start/stop nvidia-persistenced on PCI add/remove
 systemd/              eGPU-aware drop-in + shutdown hook
 docs/                 detailed install, procedure, troubleshooting, references

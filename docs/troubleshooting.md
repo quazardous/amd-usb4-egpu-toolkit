@@ -41,6 +41,26 @@ sleep 2
 systemctl is-active nvidia-persistenced.service          # active
 ```
 
+## Last-resort: disable GSP firmware (opt-in workaround)
+
+If the GSP-related cascades (Xid 79 from GSP bootstrap, `WPR2 already up`, `kgspWaitForRmInitDone` spinlock) are unbearable on your hardware, you can opt into disabling NVIDIA's on-GPU firmware bootstrap entirely:
+
+```bash
+./scripts/gsp-off.sh status       # current state
+./scripts/gsp-off.sh enable       # writes /etc/modprobe.d/nvidia-gsp-off.conf
+./scripts/gsp-off.sh disable      # remove and revert
+# reboot for the change to take effect
+```
+
+**Important caveats:**
+
+1. **Closed driver required.** The open kernel module (`kmod-nvidia-open-dkms`) ignores `NVreg_EnableGpuFirmware=0` — GSP is mandatory there. You need the proprietary module (`kmod-nvidia-dkms` on Fedora; `nvidia-dkms` on Arch; specific package names per distro). The script warns if your current driver flavor is `open` so you know to swap first.
+2. **Deprecated by NVIDIA.** Works in driver 610 series, will be removed in a future release. Tactical workaround, not a long-term fix.
+3. **Marginal perf hit** on sustained compute (clock/power management moves to the CPU side). Negligible for Ollama / inference; visible for heavy training.
+4. **Doesn't fix the AMD Phoenix x1‑Gen1 PCIe bug** itself — GSP-off bypasses the GSP RPC timeout symptom but very large data transfers during driver init can still time out on an x1-Gen1 link.
+
+Use when the cascade pattern becomes frequent enough that the productivity loss outweighs the perf cost.
+
 ## Shutdown hangs at poweroff
 
 Symptom: `sudo poweroff` (or shutdown via the GUI) gets stuck on the Fedora/distro spinner. Eventually the watchdog reboots the laptop, or the user holds the power button.
