@@ -105,6 +105,58 @@ persistenced_status() {
     fi
 }
 
+driver_flavor() {
+    # Detect open vs closed NVIDIA kmod via modinfo license.
+    # Open is "Dual MIT/GPL"; closed is "NVIDIA".
+    local lic
+    lic=$(modinfo -F license nvidia 2>/dev/null)
+    case "$lic" in
+        *MIT*|*GPL*) echo "open" ;;
+        NVIDIA)      echo "closed" ;;
+        "")          echo "none" ;;
+        *)           echo "unknown" ;;
+    esac
+}
+
+gsp_status() {
+    # Compose a one-line status for the GSP firmware. The detail matters
+    # because GSP can only be turned off with the closed kmod — and that's
+    # often what users tweak after hitting WPR2 / GSP-bootstrap cascades.
+    local flavor; flavor=$(driver_flavor)
+    local rt=""
+    [[ -f /sys/module/nvidia/parameters/EnableGpuFirmware ]] \
+        && rt=$(cat /sys/module/nvidia/parameters/EnableGpuFirmware 2>/dev/null)
+    local conf_present=false
+    grep -lq 'NVreg_EnableGpuFirmware=0' /etc/modprobe.d/*.conf 2>/dev/null && conf_present=true
+
+    case "$flavor" in
+        none)
+            echo "no nvidia driver"
+            ;;
+        open)
+            if $conf_present; then
+                echo "on (open kmod — NVreg_EnableGpuFirmware=0 in modprobe.d is ignored)"
+            else
+                echo "on (open kmod, always)"
+            fi
+            ;;
+        closed)
+            if [[ "$rt" == "0" ]]; then
+                echo "off (closed kmod, NVreg_EnableGpuFirmware=0 active)"
+            elif [[ "$rt" == "1" ]]; then
+                echo "on (closed kmod, default)"
+            elif $conf_present; then
+                echo "off-pending (closed kmod, config present, module not yet loaded)"
+            else
+                echo "on-pending (closed kmod, module not yet loaded)"
+            fi
+            ;;
+        *)
+            echo "unknown (flavor=$flavor)"
+            ;;
+    esac
+}
+
 # ---------- snapshot ----------
 snapshot() {
     local ts addr link_pair speed width verdict
@@ -114,7 +166,7 @@ snapshot() {
     speed="${link_pair%|*}"
     width="${link_pair#*|}"
     verdict=$(link_verdict "$speed" "$width")
-    local xids rminit stuck nvrm retimers tb_conn persist
+    local xids rminit stuck nvrm retimers tb_conn persist flavor gsp
     xids=$(xid_recent)
     rminit=$(rminit_failures)
     stuck=$(stuck_nvidia_procs)
@@ -122,6 +174,8 @@ snapshot() {
     retimers=$(retimer_count)
     tb_conn=$(tb_devices_connected)
     persist=$(persistenced_status)
+    flavor=$(driver_flavor)
+    gsp=$(gsp_status)
 
     # Safe-to-smi gate:
     #   - link must be OK-*
@@ -140,12 +194,13 @@ snapshot() {
 
     if [[ -n "$LOG_FILE" ]]; then
         if [[ ! -f "$LOG_FILE" ]]; then
-            printf '| time | pci | link | width | verdict | xid5m | rminit5m | stuck | retimers | tb_conn | nvrm | persist | safe |\n' >> "$LOG_FILE"
-            printf '|---|---|---|---|---|---|---|---|---|---|---|---|---|\n' >> "$LOG_FILE"
+            printf '| time | pci | link | width | verdict | xid5m | rminit5m | stuck | retimers | tb_conn | nvrm | persist | flavor | gsp | safe |\n' >> "$LOG_FILE"
+            printf '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n' >> "$LOG_FILE"
         fi
-        printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+        printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
             "$ts" "${addr:-—}" "$speed" "$width" "$verdict" \
-            "$xids" "$rminit" "$stuck" "$retimers" "$tb_conn" "$nvrm" "$persist" "$safe" \
+            "$xids" "$rminit" "$stuck" "$retimers" "$tb_conn" "$nvrm" "$persist" \
+            "$flavor" "$gsp" "$safe" \
             >> "$LOG_FILE"
         return
     fi
@@ -163,6 +218,8 @@ eGPU diag — $ts
   TB connected       : $tb_conn
   NVRM loaded        : $nvrm
   nvidia-persistenced: $persist
+  Driver flavor      : $flavor
+  GSP firmware       : $gsp
   Safe nvidia-smi    : $safe
 EOF
 }
