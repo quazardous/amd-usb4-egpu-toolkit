@@ -130,13 +130,21 @@ else
     ok "nvidia-persistenced not in failed state"
 fi
 
-# Drop-in working at boot: no Start-limit fail or 'Failed to query' since this boot.
-PERSIST_FAILS=$(journalctl -u nvidia-persistenced.service -b 0 --no-pager 2>/dev/null \
-                  | grep -cE 'Start request repeated too quickly|Failed to query NVIDIA devices' || true)
-if [[ "$PERSIST_FAILS" -eq 0 ]]; then
-    ok "nvidia-persistenced did not fail at boot (drop-in working as expected)"
+# Drop-in working: no failures since the drop-in was installed (uses its mtime as
+# the reference point, so we don't false-positive on stale failures from before
+# the toolkit was set up).
+DROP_IN=/etc/systemd/system/nvidia-persistenced.service.d/override.conf
+if [[ -f "$DROP_IN" ]]; then
+    PERSIST_FAILS=$(journalctl -u nvidia-persistenced.service --since "@$(stat -c %Y "$DROP_IN")" --no-pager 2>/dev/null \
+                      | grep -cE 'Start request repeated too quickly|Failed to query NVIDIA devices' || true)
+    if [[ "$PERSIST_FAILS" -eq 0 ]]; then
+        ok "nvidia-persistenced did not fail since drop-in installed (drop-in working as expected)"
+    else
+        fail "nvidia-persistenced failed $PERSIST_FAILS time(s) since drop-in installed — drop-in misconfigured"
+    fi
 else
-    fail "nvidia-persistenced failed $PERSIST_FAILS time(s) since boot — drop-in misconfigured, reboot after fix"
+    # No drop-in: this is a hard fail caught above; we don't double-report.
+    :
 fi
 
 XID_RECENT=$(journalctl -k --since "1 hour ago" --no-pager 2>/dev/null | grep -c 'NVRM: Xid' || true)
