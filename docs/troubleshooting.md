@@ -68,6 +68,34 @@ journalctl -t nvidia-egpu-shutdown -b -1            # the helper's syslog messag
 
 If it's missing, re‑run `setup-compute.sh` — it installs the service file, the helper script, and enables the unit.
 
+## Forensic analysis of past sessions
+
+To understand what happened across recent boots — useful when you've noticed flakiness over time but can't pin it on a single event:
+
+```bash
+./scripts/egpu-postmortem.sh                # summary table, last 10 boots
+./scripts/egpu-postmortem.sh --last 30      # last 30 boots
+./scripts/egpu-postmortem.sh --boot -3      # all relevant events from boot -3
+./scripts/egpu-postmortem.sh --since "1 week ago"
+./scripts/egpu-postmortem.sh --csv          # for piping into a spreadsheet
+```
+
+Per-boot counters:
+- **Plug / Unpl** — eGPU PCI enable / pciehp link-down events
+- **Xid** — NVRM Xid events (typically Xid 79 on eGPU)
+- **RmInit** — `RmInitAdapter failed` / `Cannot attach gpu` silent failures
+- **Phx** — number of times the link negotiated to `2.5 GT/s × 1` (Phoenix bug fired)
+- **ShutOK** — `shutdown-helper.sh done` was logged at the end of that boot
+- **Unmnt** — `Failed unmounting` / `A stop job is running` (shutdown trouble)
+- **PersFl** — `nvidia-persistenced` failure events (rate-limit, query failures)
+
+Rows colored:
+- **green** — clean session
+- **yellow** — Phoenix bug fired, or persistenced failed, or very short boot (possible cascade-and-reboot)
+- **red** — Xid / RmInit / unmount failure → driver or shutdown issue
+
+The detail mode (`--boot N`) groups the events into Thunderbolt/eGPU enumeration, NVIDIA driver lifecycle, persistenced, shutdown helper, shutdown failures, and other notable kernel events — useful when reconstructing exactly what happened that day.
+
 ## Recovering from the cascade without reboot
 
 You can't, reliably. Once `nvidia-smi` is in D state (uninterruptible kernel sleep waiting on the GSP RPC), the only way out is a reboot:

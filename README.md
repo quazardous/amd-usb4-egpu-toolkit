@@ -30,13 +30,15 @@ Should also work on Intel USB4 hosts — the persistence/cascade fixes are vendo
 
 ```
 scripts/
-  egpu-preflight.sh  pre-plug readiness check (config in place, no leftover bad state)
-  egpu-diag.sh       passive live diagnostic, never touches the driver
-  egpu-stress.sh     deviceQuery + bandwidth + gpu-burn, compute-only safe
-  setup-compute.sh   distro-agnostic config (modprobe + udev + drop-in + initramfs)
-udev/                start/stop nvidia-persistenced on PCI add/remove
-systemd/             eGPU-aware drop-in (no boot failure when no GPU)
-docs/                detailed install, procedure, troubleshooting, references
+  egpu-preflight.sh   pre-plug readiness check (config in place, no leftover bad state)
+  egpu-diag.sh        passive live diagnostic, never touches the driver
+  egpu-postmortem.sh  retrospective analysis: per-boot summary + detail mode
+  egpu-stress.sh      deviceQuery + bandwidth + gpu-burn, compute-only safe
+  setup-compute.sh    distro-agnostic config (modprobe + udev + drop-in + initramfs)
+  shutdown-helper.sh  shutdown-time eGPU teardown (installed in /usr/local/lib)
+udev/                 start/stop nvidia-persistenced on PCI add/remove
+systemd/              eGPU-aware drop-in + shutdown hook
+docs/                 detailed install, procedure, troubleshooting, references
 ```
 
 ## Quick start
@@ -99,6 +101,7 @@ When something goes wrong, the diagnosis flow is:
 ```bash
 ./scripts/egpu-preflight.sh    # before plug — is the system in a usable state?
 ./scripts/egpu-diag.sh         # any time — what's the current link / driver state?
+./scripts/egpu-postmortem.sh   # after the fact — what happened across recent boots?
 ```
 
 Common scenarios and how to fix them — full tree + glossary in [docs/troubleshooting.md](docs/troubleshooting.md):
