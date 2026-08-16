@@ -115,9 +115,10 @@ do_enable() {
             warn "The currently installed NVIDIA kmod is the OPEN variant."
             warn "It will IGNORE NVreg_EnableGpuFirmware=0 (GSP is mandatory there)."
             warn "Switch to the closed driver first:"
-            warn "    Fedora: sudo dnf swap kmod-nvidia-open-dkms kmod-nvidia-dkms"
-            warn "    Ubuntu: sudo apt install nvidia-dkms-XXX  (specific version)"
-            warn "    Arch:   sudo pacman -S nvidia-dkms        (instead of nvidia-open-dkms)"
+            warn "    Fedora (NVIDIA CUDA repo): sudo dnf swap kmod-nvidia-open-dkms kmod-nvidia-latest-dkms"
+            warn "    Fedora (RPM Fusion):       sudo dnf swap akmod-nvidia-open akmod-nvidia"
+            warn "    Ubuntu:                    sudo apt install nvidia-dkms-XXX  (specific version)"
+            warn "    Arch:                      sudo pacman -S nvidia-dkms  (instead of nvidia-open-dkms)"
             warn "Proceeding to write the config anyway so it takes effect after the swap."
             ;;
         closed) ok "closed driver detected — GSP-off will take effect after reboot." ;;
