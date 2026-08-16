@@ -49,7 +49,12 @@ link_verdict() {
         "16.0 GT/s PCIe") [[ "$width" == "x4" ]] && echo "OK-Gen4x4" || echo "WARN-Gen4-narrow" ;;
         "8.0 GT/s PCIe")  [[ "$width" == "x4" ]] && echo "OK-Gen3x4"  || echo "WARN-Gen3-narrow" ;;
         "5.0 GT/s PCIe")  echo "DEGRADED-Gen2" ;;
-        "2.5 GT/s PCIe")  echo "BUG-Gen1-AMD-Phoenix" ;;
+        # Gen1 at full width (x4) is usually ASPM idle-parking, not a bug:
+        # the link retrains up as soon as there's PCIe traffic. Real
+        # AMD Phoenix bug is Gen1 × x1 (training actually failed to
+        # negotiate more than one lane).
+        "2.5 GT/s PCIe")  [[ "$width" == "x1" ]] && echo "BUG-Gen1x1-AMD-Phoenix" \
+                                                 || echo "IDLE-Gen1-parked" ;;
         no-device)        echo "no-device" ;;
         *)                echo "unknown:$speed" ;;
     esac
@@ -178,14 +183,14 @@ snapshot() {
     gsp=$(gsp_status)
 
     # Safe-to-smi gate:
-    #   - link must be OK-*
+    #   - link must be OK-* (active) OR IDLE-* (parked, retrains on traffic)
     #   - no Xid events in last 5min
     #   - no RmInitAdapter failures in last 5min
     #   - no nvidia process stuck in D state
     #   - GPU actually on bus
     local safe="NO"
     case "$verdict" in
-        OK-*)
+        OK-*|IDLE-*)
             if [[ "$xids" -eq 0 && "$rminit" -eq 0 && "$stuck" -eq 0 && -n "$addr" ]]; then
                 safe="YES"
             fi
