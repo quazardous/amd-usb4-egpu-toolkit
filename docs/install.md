@@ -10,6 +10,9 @@ The toolkit's `scripts/setup-compute.sh` then drops the modprobe blacklists, ude
 
 ## Fedora 44+
 
+**Automated:** `./install.sh` (add `--with-cuda-toolkit` for `nvcc`) does every
+step below. The manual path, and why each step is needed:
+
 Use the **closed** module from **RPM Fusion**. If you plan to disable the GSP
 (`gsp-off.sh`, the documented fix for GSP init failures on an AMD USB4 host),
 the closed module is mandatory: the open one ignores
