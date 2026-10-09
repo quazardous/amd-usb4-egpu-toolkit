@@ -24,6 +24,7 @@ install.sh            one-shot Fedora install (driver, closed module, config, GS
 scripts/
   egpu-preflight.sh   pre-plug readiness check (config in place, no leftover bad state)
   egpu-diag.sh        passive live diagnostic, never touches the driver
+  egpu-eject.sh       detach the eGPU cleanly before unplugging (--undo to cancel)
   egpu-recover.sh     guided recovery from a stuck driver (cascade, WPR2, etc.)
   egpu-postmortem.sh  retrospective analysis: per-boot summary + detail mode
   egpu-stress.sh      deviceQuery + bandwidth + gpu-burn, compute-only safe

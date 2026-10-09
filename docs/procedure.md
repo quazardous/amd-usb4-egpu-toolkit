@@ -46,13 +46,28 @@ nvidia-smi
 
 If `egpu-diag.sh` reports `BUG-Gen1x1-AMD-Phoenix`, **don't** invoke `nvidia-smi` yet — the GSP bootstrap will time out and you'll be stuck in the [NVRM cascade](troubleshooting.md#nvrm-cascade-deadlock-after-xid-79). Power‑cycle the eGPU and try again. The bug is intermittent: a second plug after a power cycle often re‑trains the link to Gen4 cleanly.
 
+### Step 3 — Unplug: eject first
+
+```bash
+./scripts/egpu-eject.sh
+# → checks nothing uses the GPU, stops nvidia-persistenced, PCI-removes the
+#   GPU, deauthorizes the enclosure, then says "Safe to unplug"
+```
+
+Then pull the cable and switch the enclosure off.
+
+Pulling the cable with `nvidia.ko` still bound is a surprise removal: the
+driver logs `GPU ... has fallen off the bus` and an Xid (154 observed), and if
+a program was using the GPU it can deadlock. Changed your mind after ejecting?
+`./scripts/egpu-eject.sh --undo` brings the GPU back without unplugging.
+
 ## What the udev rule does for you
 
 The toolkit installs a udev rule that calls `systemctl start nvidia-persistenced.service` automatically when an NVIDIA display device appears on the PCI bus (and `stop` when it disappears). Combined with the `ConditionPathExists=/dev/nvidia0` drop‑in, this means:
 
 - Boot without the eGPU: `nvidia-persistenced` skips cleanly, no failure
-- Plug the eGPU: udev fires the rule → service starts → device stays warm
-- Unplug: udev fires the remove rule → service stops cleanly
+- Plug the eGPU: the nvidia driver binds → udev starts the service (it creates `/dev/nvidia*` first) → device stays warm, and the GPU's link state is logged (`journalctl -t egpu-link`)
+- Unplug: eject first (below); udev stops the service on unbind
 - Re‑plug: starts again, no `systemctl reset-failed` needed
 
 ## Verification

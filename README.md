@@ -32,6 +32,7 @@ git clone https://github.com/quazardous/amd-usb4-egpu-toolkit && ./amd-usb4-egpu
 Reboot. Then, from `amd-usb4-egpu-toolkit/`: `./scripts/egpu-preflight.sh` (must say READY TO PLUG),
 enclosure **off** → cable in → enclosure **on**, and check with
 `./scripts/egpu-diag.sh` (verdict `OK-Gen4x4`) before `nvidia-smi`.
+Before unplugging: `./scripts/egpu-eject.sh`.
 
 Add `--with-cuda-toolkit` for `nvcc` and the stress tests. Other distros:
 [docs/install.md](docs/install.md).
