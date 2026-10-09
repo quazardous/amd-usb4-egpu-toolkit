@@ -178,6 +178,22 @@ blacklist nvidia-drm
 blacklist nvidia-modeset
 EOF
 
+    # Keep desktop apps off the eGPU. GTK4 renders with Vulkan and enumerates
+    # every GPU at start-up: the NVIDIA Vulkan ICD and EGL vendor then open
+    # /dev/nvidia0 and hold it for the app's lifetime (seen with ptyxis, which
+    # blocked egpu-eject.sh). Read by the systemd user manager at login, so it
+    # covers every app of the graphical session. CUDA (libcuda) is unaffected.
+    # Vulkan or EGL on the eGPU for one command: VK_LOADER_DRIVERS_DISABLE= cmd
+    sudo install -d -m 0755 /etc/environment.d
+    write_inline /etc/environment.d/90-amd-usb4-egpu-compute-only.conf <<'EOF'
+# amd-usb4-egpu-toolkit, compute-only: hide the NVIDIA eGPU from desktop
+# apps' Vulkan and EGL so they never hold /dev/nvidia* (which would block a
+# clean eject). CUDA is not affected. Override for one command:
+#   VK_LOADER_DRIVERS_DISABLE= __EGL_VENDOR_LIBRARY_FILENAMES= <command>
+VK_LOADER_DRIVERS_DISABLE=*nvidia*
+__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+EOF
+
     write_root_file "$REPO_DIR/udev/99-nvidia-egpu-persistenced.rules" \
                     /etc/udev/rules.d/99-nvidia-egpu-persistenced.rules
 
@@ -259,6 +275,7 @@ do_uninstall() {
     sudo rmdir /usr/local/lib/amd-usb4-egpu-toolkit 2>/dev/null || true
     remove_if_present /etc/modprobe.d/blacklist-nouveau.conf
     remove_if_present /etc/modprobe.d/nvidia-compute-only.conf
+    remove_if_present /etc/environment.d/90-amd-usb4-egpu-compute-only.conf
     remove_if_present /etc/udev/rules.d/99-nvidia-egpu-persistenced.rules
     remove_if_present /etc/systemd/system/nvidia-persistenced.service.d/override.conf
 
