@@ -42,6 +42,7 @@ Add `--with-cuda-toolkit` for `nvcc` and the stress tests. Other distros:
 [Install details](docs/install.md) ·
 [Plug / verify / benchmarks](docs/procedure.md) ·
 [Troubleshooting](docs/troubleshooting.md) ·
+[Sources](docs/references.md) ·
 [Wiki](https://github.com/quazardous/amd-usb4-egpu-toolkit/wiki)
 
 ## Contributing
