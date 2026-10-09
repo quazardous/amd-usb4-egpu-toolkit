@@ -112,6 +112,31 @@ function tbPeripherals() {
     return out;
 }
 
+// Programs holding /dev/nvidia* open. Only the user's own processes are
+// readable without root, which covers desktop apps (a GTK4 app probing Vulkan
+// / EGL holds the GPU and blocks a clean eject). Root daemons are not seen,
+// nvidia-persistenced included, which egpu-eject.sh handles anyway.
+function nvidiaHolders() {
+    const names = new Set();
+    for (const pid of listDir('/proc')) {
+        if (!/^\d+$/.test(pid))
+            continue;
+        for (const fd of listDir(`/proc/${pid}/fd`)) {
+            let target = null;
+            try {
+                target = GLib.file_read_link(`/proc/${pid}/fd/${fd}`);
+            } catch {
+                continue;
+            }
+            if (target.startsWith('/dev/nvidia')) {
+                names.add(readFile(`/proc/${pid}/comm`) ?? pid);
+                break;
+            }
+        }
+    }
+    return [...names];
+}
+
 const GEN = {'2.5': 1, '5.0': 2, '8.0': 3, '16.0': 4, '32.0': 5, '64.0': 6};
 
 // Same classification as egpu-diag.sh: the GPU's OWN link is the signal.
@@ -129,11 +154,14 @@ function linkInfo(gpu) {
 
 const EgpuIndicator = GObject.registerClass(
 class EgpuIndicator extends PanelMenu.Button {
-    _init() {
+    _init(path) {
         super._init(0.0, 'eGPU Indicator');
 
+        // Graphics-card icon shipped with the extension (symbolic: recoloured
+        // like the other panel icons). The eGPU does compute, not display.
+        this._gpuIcon = Gio.icon_new_for_string(`${path}/icons/egpu-symbolic.svg`);
         this._icon = new St.Icon({
-            icon_name: 'video-display-symbolic',
+            gicon: this._gpuIcon,
             style_class: 'system-status-icon',
         });
         this.add_child(this._icon);
@@ -259,7 +287,8 @@ class EgpuIndicator extends PanelMenu.Button {
                     if (a.status === 124)
                         this._smiHung = true;
                     else if (a.ok)
-                        s.apps = a.stdout.trim().split('\n').filter(l => l.trim());
+                        s.apps = a.stdout.trim().split('\n').filter(l => l.trim())
+                            .map(l => l.split(',')[1]?.trim()).filter(Boolean);
                 }
             } finally {
                 this._smiInFlight = false;
@@ -296,12 +325,12 @@ class EgpuIndicator extends PanelMenu.Button {
         this._icon.remove_style_class_name('egpu-indicator-warning');
         this._icon.remove_style_class_name('egpu-indicator-ejected');
         this._icon.remove_style_class_name('egpu-indicator-dim');
-        this._icon.icon_name = {
-            ok: 'video-display-symbolic',
+        const themed = {
             warn: 'dialog-warning-symbolic',
             ejected: 'media-eject-symbolic',
             busy: 'media-eject-symbolic',
-        }[mode] ?? 'video-display-symbolic';
+        }[mode];
+        this._icon.gicon = themed ? new Gio.ThemedIcon({name: themed}) : this._gpuIcon;
         if (mode === 'warn')
             this._icon.add_style_class_name('egpu-indicator-warning');
         if (mode === 'ejected')
@@ -349,11 +378,14 @@ class EgpuIndicator extends PanelMenu.Button {
             ? `VRAM  ${(used / 1024).toFixed(1)} / ${(total / 1024).toFixed(1)} GiB` : '');
         set(this._power, live && power !== null ? `Power  ${Math.round(power)} W` : '');
         set(this._persist, live && s.persist ? `Persistence daemon  ${s.persist}` : '');
-        set(this._apps, live && s.apps
-            ? (s.apps.length
-                ? `In use by: ${s.apps.map(l => l.split(',')[1]?.trim()).join(', ')}`
-                : 'In use by: nothing')
-            : '');
+        // CUDA processes (nvidia-smi) plus any program holding /dev/nvidia*:
+        // the latter is what egpu-eject.sh refuses to eject under.
+        if (live && this.menu.isOpen) {
+            const users = new Set([...(s.apps ?? []), ...nvidiaHolders()]);
+            set(this._apps, users.size ? `In use by: ${[...users].join(', ')}` : 'In use by: nothing');
+        } else if (!live) {
+            set(this._apps, '');
+        }
 
         this._ejectItem.visible = Boolean(s.gpu) && mode !== 'busy';
         this._ejectItem.setSensitive(s.stuck === 0);
@@ -407,7 +439,7 @@ class EgpuIndicator extends PanelMenu.Button {
 
 export default class EgpuIndicatorExtension extends Extension {
     enable() {
-        this._indicator = new EgpuIndicator();
+        this._indicator = new EgpuIndicator(this.path);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
