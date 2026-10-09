@@ -30,6 +30,10 @@ polkit rule (admins only, local active session, this one script only):
 ./scripts/setup-compute.sh --passwordless-eject     # or: ./install.sh --passwordless-eject
 ```
 
+Eject refuses while a program holds `/dev/nvidia*`; the menu's "In use by"
+names it. Desktop apps are kept off the eGPU by the session environment file
+`setup-compute.sh` installs (Vulkan / EGL hidden), effective after a re-login.
+
 ## Install
 
 ```bash
