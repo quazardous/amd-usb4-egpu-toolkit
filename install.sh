@@ -26,6 +26,7 @@
 #   ./install.sh --with-cuda-toolkit # also nvcc + cmake (stress tests)
 #   ./install.sh --keep-gsp          # leave the GSP on (open module allowed)
 #   ./install.sh --with-gnome-extension  # panel indicator with status + eject
+#   ./install.sh --passwordless-eject    # eject without a password (polkit, admins only)
 #
 # Run as your normal user (it calls sudo itself), with the eGPU UNPLUGGED.
 # Reboot afterwards. Details and rationale: docs/install.md.
@@ -44,6 +45,7 @@ export EGPU_TOOLKIT_INSTALLER=1
 ASSUME_YES=false
 WITH_CUDA=false
 WITH_EXT=false
+PASSWORDLESS_EJECT=false
 KEEP_GSP=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -51,7 +53,8 @@ while [[ $# -gt 0 ]]; do
         --with-cuda-toolkit) WITH_CUDA=true; shift ;;
         --keep-gsp)          KEEP_GSP=true; shift ;;
         --with-gnome-extension) WITH_EXT=true; shift ;;
-        -h|--help)           sed -n '2,30p' "$0"; exit 0 ;;
+        --passwordless-eject) PASSWORDLESS_EJECT=true; shift ;;
+        -h|--help)           sed -n '2,31p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1 (see --help)" >&2; exit 1 ;;
     esac
 done
@@ -155,7 +158,9 @@ done < <(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n')
 [[ ${#bad[@]} -eq 0 ]] || die "No closed module for: ${bad[*]} — see /var/cache/akmods/nvidia/*.log"
 
 # ---------- 5-6. toolkit config ----------
-bash "$REPO_DIR/scripts/setup-compute.sh" --yes
+compute_args=(--yes)
+$PASSWORDLESS_EJECT && compute_args+=(--passwordless-eject)
+bash "$REPO_DIR/scripts/setup-compute.sh" "${compute_args[@]}"
 if $KEEP_GSP; then
     [[ -f /etc/modprobe.d/nvidia-gsp-off.conf ]] && bash "$REPO_DIR/scripts/gsp-off.sh" disable
 else

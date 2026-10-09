@@ -22,6 +22,7 @@
 #   ./setup-compute.sh           # interactive (asks before sudo writes)
 #   ./setup-compute.sh --yes     # non-interactive (CI / scripted)
 #   ./setup-compute.sh --uninstall
+#   ./setup-compute.sh --passwordless-eject   # also let admins eject without a password (polkit)
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -29,11 +30,13 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 ASSUME_YES=false
 UNINSTALL=false
+PASSWORDLESS_EJECT=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -y|--yes) ASSUME_YES=true; shift ;;
         --uninstall) UNINSTALL=true; shift ;;
+        --passwordless-eject) PASSWORDLESS_EJECT=true; shift ;;
         -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
@@ -194,6 +197,12 @@ EOF
     write_root_file "$REPO_DIR/scripts/egpu-eject.sh" \
                     /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
     sudo chmod 0755 /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
+
+    # Opt-in: no password for that one script (GNOME extension's Eject).
+    if $PASSWORDLESS_EJECT; then
+        write_root_file "$REPO_DIR/polkit/50-amd-usb4-egpu-toolkit-eject.rules" \
+                        /etc/polkit-1/rules.d/50-amd-usb4-egpu-toolkit-eject.rules
+    fi
     write_root_file "$REPO_DIR/systemd/nvidia-egpu-shutdown.service" \
                     /etc/systemd/system/nvidia-egpu-shutdown.service
 
@@ -242,6 +251,7 @@ do_uninstall() {
     remove_if_present /etc/systemd/system/nvidia-egpu-shutdown.service
     remove_if_present /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
     remove_if_present /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
+    remove_if_present /etc/polkit-1/rules.d/50-amd-usb4-egpu-toolkit-eject.rules
     sudo rmdir /usr/local/lib/amd-usb4-egpu-toolkit 2>/dev/null || true
     remove_if_present /etc/modprobe.d/blacklist-nouveau.conf
     remove_if_present /etc/modprobe.d/nvidia-compute-only.conf

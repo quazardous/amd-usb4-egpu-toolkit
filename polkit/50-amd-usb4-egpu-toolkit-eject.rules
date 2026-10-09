@@ -1,0 +1,23 @@
+// Let administrators eject the eGPU without a password.
+//
+// Opt-in: installed by `scripts/setup-compute.sh --passwordless-eject`
+// (or `install.sh --passwordless-eject`), removed by --uninstall.
+//
+// Scope, deliberately narrow:
+//   - only pkexec of this one root-owned script (installed 0755 root:root by
+//     setup-compute.sh; never point a rule like this at a user-writable path)
+//   - only from a local, active session (not SSH, not a locked background seat)
+//   - only for members of the admin group (wheel on Fedora, sudo on Debian/Ubuntu)
+// The script only ejects / un-ejects the eGPU and refuses to act while a
+// program uses it.
+//
+// Install destination: /etc/polkit-1/rules.d/50-amd-usb4-egpu-toolkit-eject.rules
+
+polkit.addRule(function (action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh" &&
+        subject.local && subject.active &&
+        (subject.isInGroup("wheel") || subject.isInGroup("sudo"))) {
+        return polkit.Result.YES;
+    }
+});

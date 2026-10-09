@@ -23,6 +23,13 @@ Eject runs `/usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh`, a root-owned
 copy installed by `scripts/setup-compute.sh` (pkexec must not run a
 user-writable file).
 
+By default pkexec asks for your password. To eject without one, install the
+polkit rule (admins only, local active session, this one script only):
+
+```bash
+./scripts/setup-compute.sh --passwordless-eject     # or: ./install.sh --passwordless-eject
+```
+
 ## Install
 
 ```bash
