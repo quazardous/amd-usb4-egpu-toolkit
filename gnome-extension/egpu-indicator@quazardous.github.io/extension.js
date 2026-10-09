@@ -115,26 +115,13 @@ function tbPeripherals() {
 // Programs holding /dev/nvidia* open. Only the user's own processes are
 // readable without root, which covers desktop apps (a GTK4 app probing Vulkan
 // / EGL holds the GPU and blocks a clean eject). Root daemons are not seen,
-// nvidia-persistenced included, which egpu-eject.sh handles anyway.
-function nvidiaHolders() {
-    const names = new Set();
-    for (const pid of listDir('/proc')) {
-        if (!/^\d+$/.test(pid))
-            continue;
-        for (const fd of listDir(`/proc/${pid}/fd`)) {
-            let target = null;
-            try {
-                target = GLib.file_read_link(`/proc/${pid}/fd/${fd}`);
-            } catch {
-                continue;
-            }
-            if (target.startsWith('/dev/nvidia')) {
-                names.add(readFile(`/proc/${pid}/comm`) ?? pid);
-                break;
-            }
-        }
-    }
-    return [...names];
+// nvidia-persistenced included, which egpu-eject.sh handles anyway. Walking
+// /proc happens in a subprocess to keep the shell's main loop responsive.
+async function nvidiaHolders() {
+    const r = await run(['find', '/proc', '-mindepth', '3', '-maxdepth', '3',
+        '-path', '/proc/[0-9]*/fd/*', '-lname', '/dev/nvidia*']);
+    const pids = new Set(r.stdout.split('\n').map(l => l.split('/')[2]).filter(Boolean));
+    return [...pids].map(pid => readFile(`/proc/${pid}/comm`) ?? pid);
 }
 
 const GEN = {'2.5': 1, '5.0': 2, '8.0': 3, '16.0': 4, '32.0': 5, '64.0': 6};
@@ -295,6 +282,7 @@ class EgpuIndicator extends PanelMenu.Button {
             }
         }
         s.smiHung = this._smiHung;
+        s.holders = gpu && this.menu.isOpen ? await nvidiaHolders() : [];
         this._state = s;
     }
 
@@ -381,7 +369,7 @@ class EgpuIndicator extends PanelMenu.Button {
         // CUDA processes (nvidia-smi) plus any program holding /dev/nvidia*:
         // the latter is what egpu-eject.sh refuses to eject under.
         if (live && this.menu.isOpen) {
-            const users = new Set([...(s.apps ?? []), ...nvidiaHolders()]);
+            const users = new Set([...(s.apps ?? []), ...s.holders]);
             set(this._apps, users.size ? `In use by: ${[...users].join(', ')}` : 'In use by: nothing');
         } else if (!live) {
             set(this._apps, '');

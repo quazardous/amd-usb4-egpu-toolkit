@@ -48,3 +48,7 @@ run a nested session (needs `mutter-devkit`):
 ```bash
 dbus-run-session gnome-shell --devkit --wayland
 ```
+
+## Publishing
+
+Prepared, not published: see [PUBLISHING.md](PUBLISHING.md) (build with `./pack.sh`).

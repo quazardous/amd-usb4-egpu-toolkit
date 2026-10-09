@@ -1,8 +1,10 @@
 {
   "uuid": "egpu-indicator@quazardous.github.io",
   "name": "eGPU Indicator",
-  "description": "Status, usage and safe eject for an NVIDIA eGPU on a USB4 / Thunderbolt laptop. Companion of amd-usb4-egpu-toolkit.",
-  "shell-version": ["50"],
+  "description": "Status, usage and safe eject for an NVIDIA eGPU on a USB4 / Thunderbolt laptop.\n\nThe indicator appears only while an eGPU is plugged in: PCIe link, temperature, load, VRAM, power, programs using the GPU, and one-click eject before unplugging.\n\nEject needs the companion toolkit (amd-usb4-egpu-toolkit), whose setup script installs the root-owned helper run through pkexec.",
+  "shell-version": [
+    "50"
+  ],
   "url": "https://github.com/quazardous/amd-usb4-egpu-toolkit",
   "version-name": "0.1"
 }
