@@ -231,10 +231,14 @@ EOF
     # Called from install.sh, which does the remaining steps itself.
     [[ -n "${EGPU_TOOLKIT_INSTALLER:-}" ]] && return 0
 
-    print_cmdline_guidance
     echo "Next steps:"
     echo "  1. install the NVIDIA driver (Fedora: ./install.sh does everything; others: docs/install.md)"
-    echo "  2. add the kernel cmdline arg above and reboot"
+    if grep -qw 'nvidia-drm.modeset=0' /proc/cmdline 2>/dev/null; then
+        echo "  2. (nvidia-drm.modeset=0 already on the kernel command line)"
+    else
+        print_cmdline_guidance
+        echo "  2. add the kernel cmdline arg above and reboot"
+    fi
     echo "  3. plug eGPU (enclosure off, cable in, then power on the enclosure)"
     echo "  4. ./scripts/egpu-diag.sh  →  verdict should be OK-Gen4x4 (or OK-Gen3x4 on TB3)"
 }
