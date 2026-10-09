@@ -39,10 +39,13 @@ names it. Desktop apps are kept off the eGPU by the session environment file
 ```bash
 ./install.sh --with-gnome-extension     # or by hand:
 ln -s "$PWD/gnome-extension/egpu-indicator@quazardous.github.io" ~/.local/share/gnome-shell/extensions/
+# log out and back in, then:
 gnome-extensions enable egpu-indicator@quazardous.github.io
 ```
 
-On Wayland, log out and back in to load it. To try it without logging out,
+On Wayland the shell only discovers new extensions at login, so
+`gnome-extensions enable` fails until you log back in. Or build the zip
+(`./gnome-extension/pack.sh`) and run `gnome-extensions install --force` on it. To try it without logging out,
 run a nested session (needs `mutter-devkit`):
 
 ```bash

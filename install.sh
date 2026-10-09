@@ -203,8 +203,18 @@ if $WITH_EXT; then
     mkdir -p "$HOME/.local/share/gnome-shell/extensions"
     # A symlink, so a git pull updates the extension.
     ln -sfn "$REPO_DIR/gnome-extension/$uuid" "$HOME/.local/share/gnome-shell/extensions/$uuid"
-    gnome-extensions enable "$uuid" 2>/dev/null || true
-    ok "eGPU Indicator extension linked and enabled (log out and back in on Wayland)"
+    # Not "gnome-extensions enable": it fails until the shell has rescanned its
+    # extensions (next login on Wayland), so the extension would stay off.
+    # Adding the uuid to enabled-extensions takes effect at the next login.
+    enabled=$(gsettings get org.gnome.shell enabled-extensions)
+    if ! grep -q "'$uuid'" <<<"$enabled"; then
+        if [[ "$enabled" == "@as []" || "$enabled" == "[]" ]]; then
+            gsettings set org.gnome.shell enabled-extensions "['$uuid']"
+        else
+            gsettings set org.gnome.shell enabled-extensions "${enabled%]}, '$uuid']"
+        fi
+    fi
+    ok "eGPU Indicator extension linked and enabled (log out and back in to load it)"
 fi
 
 echo ""
