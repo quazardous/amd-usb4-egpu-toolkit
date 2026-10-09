@@ -4,7 +4,7 @@
 # Looks across recent boots and surfaces:
 #   - eGPU plug/unplug events (via NVIDIA + pciehp logs)
 #   - Xid 79 / RmInitAdapter failures
-#   - Phoenix x1-Gen1 bug occurrences (PCIe link "limited by 2.5 GT/s x1")
+#   - Phoenix x1-Gen1 bug occurrences (GPU link at 2.5 GT/s x1 when the driver binds)
 #   - shutdown-helper.sh execution and unload status
 #   - unmount failures / stop-job-running messages at shutdown
 #   - boot duration (very short boots can indicate cascade-then-reboot)
@@ -93,8 +93,13 @@ analyze_boot() {
     local unplugs; unplugs=$(count_kernel "$boot" 'pciehp.*Slot.*Link Down')
     local xids;    xids=$(count_kernel "$boot" 'NVRM: Xid')
     local rminit;  rminit=$(count_kernel "$boot" 'RmInitAdapter failed|Cannot attach gpu')
-    # Each fresh enum on Phoenix x1-Gen1 prints "limited by 2.5 GT/s PCIe x1".
-    local phoenix; phoenix=$(count_kernel "$boot" 'limited by 2\.5 GT/s PCIe x1')
+    # Phoenix x1-Gen1 = the GPU's OWN link trained at 2.5 GT/s x1. The udev
+    # rule logs it at bind time ("egpu-link: ... link 2.5 GT/s PCIe x1").
+    # Do not count the kernel's "limited by 2.5 GT/s PCIe x1 link at <port>":
+    # on AMD USB4 the host tunnel port is virtual and always advertises
+    # 2.5 GT/s x1, so that line prints on every healthy enumeration too.
+    # Boots before the udev rule was installed have no egpu-link line → 0.
+    local phoenix; phoenix=$(count_unit "$boot" 'egpu-link\[[0-9]+\]: .* link 2\.5 GT/s PCIe x1$')
 
     # Shutdown helper success = "shutdown-helper.sh done" syslog message.
     local shutdown_ok; shutdown_ok=$(count_unit "$boot" 'nvidia-egpu-shutdown.*shutdown-helper\.sh done')

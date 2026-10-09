@@ -1,5 +1,5 @@
-# udev rules: start/stop nvidia-persistenced when an NVIDIA display device
-# appears or disappears on the PCI bus.
+# udev rules: start/stop nvidia-persistenced when the nvidia driver binds to /
+# unbinds from an NVIDIA GPU, and log the GPU's own PCIe link state at bind.
 #
 # Why: on an eGPU setup, nvidia-persistenced cannot start until the GPU is
 # plugged in. These rules wire its lifecycle to the actual presence of the
@@ -7,7 +7,8 @@
 # `systemctl reset-failed && start` after each plug).
 #
 # Coupled with systemd/nvidia-persistenced.service.d/override.conf which
-# makes the service no-op at boot when no GPU is present.
+# makes the service no-op at boot when no GPU is bound to the nvidia driver,
+# and creates the /dev/nvidia* nodes before the daemon starts.
 #
 # Install destination: /etc/udev/rules.d/99-nvidia-egpu-persistenced.rules
 # Apply with: sudo udevadm control --reload && sudo udevadm trigger
@@ -16,13 +17,25 @@
 #   PCI_CLASS == 30000   → VGA compatible controller (consumer cards: RTX 30xx, 40xx)
 #   PCI_CLASS == 30200   → 3D controller (workstation: A4000, A6000, etc.)
 #   PCI_ID    == 10DE:*  → any NVIDIA device
+#
+# Start on "bind", not "add". On a hot-plug the PCI "add" event fires BEFORE
+# the nvidia driver attaches: /dev/nvidia0 does not exist yet, the service
+# condition failed, and the daemon never came up on plug (observed on Fedora /
+# RPM Fusion, which only creates /dev/nvidia* on first userspace access).
+# "bind" fires once DRIVER=nvidia is set. "add" with DRIVER=nvidia still
+# matches the coldplug replay at boot (udevadm trigger --action=add on an
+# already-bound device), for an eGPU plugged before boot.
 
-ACTION=="add", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30000", ENV{PCI_ID}=="10DE:*", \
-    RUN+="/usr/bin/systemctl --no-block start nvidia-persistenced.service"
-ACTION=="add", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30200", ENV{PCI_ID}=="10DE:*", \
+ACTION=="add|bind", SUBSYSTEM=="pci", DRIVER=="nvidia", ENV{PCI_CLASS}=="30000|30200", ENV{PCI_ID}=="10DE:*", \
     RUN+="/usr/bin/systemctl --no-block start nvidia-persistenced.service"
 
-ACTION=="remove", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30000", ENV{PCI_ID}=="10DE:*", \
-    RUN+="/usr/bin/systemctl --no-block stop nvidia-persistenced.service"
-ACTION=="remove", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30200", ENV{PCI_ID}=="10DE:*", \
+# Record the GPU's own link state when the driver binds. The kernel line
+# "limited by 2.5 GT/s PCIe x1 link at <port>" cannot tell the Phoenix x1-Gen1
+# bug apart: on AMD USB4 the host tunnel port is virtual and always advertises
+# 2.5 GT/s x1, so it prints on every enumeration. The GPU's own
+# current_link_* is the real signal; egpu-postmortem.sh counts these lines.
+ACTION=="bind", SUBSYSTEM=="pci", DRIVER=="nvidia", ENV{PCI_CLASS}=="30000|30200", ENV{PCI_ID}=="10DE:*", \
+    RUN+="/usr/bin/logger -t egpu-link '%k bound to nvidia, link $attr{current_link_speed} x$attr{current_link_width}'"
+
+ACTION=="unbind|remove", SUBSYSTEM=="pci", ENV{PCI_CLASS}=="30000|30200", ENV{PCI_ID}=="10DE:*", \
     RUN+="/usr/bin/systemctl --no-block stop nvidia-persistenced.service"
