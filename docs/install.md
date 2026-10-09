@@ -2,7 +2,7 @@
 
 This toolkit needs three NVIDIA components:
 
-- the **kernel module + CUDA driver** (`nvidia-driver-cuda` or distro equivalent — NOT the full display driver)
+- the **kernel module + CUDA driver** (the **closed** module if you need `gsp-off.sh` — see your distro below)
 - **`nvidia-persistenced`** daemon (keeps the eGPU warm between CUDA calls)
 - the **CUDA toolkit** (for `nvcc`, optional but recommended)
 
@@ -10,17 +10,60 @@ The toolkit's `scripts/setup-compute.sh` then drops the modprobe blacklists, ude
 
 ## Fedora 44+
 
-Use NVIDIA's CUDA repo (latest drivers, more reliable than RPM Fusion for this use case):
+Use the **closed** module from **RPM Fusion**. If you plan to disable the GSP
+(`gsp-off.sh`, the documented fix for GSP init failures on an AMD USB4 host),
+the closed module is mandatory: the open one ignores
+`NVreg_EnableGpuFirmware=0`. Since branch 615, NVIDIA's CUDA repository ships
+the open module only (*"The proprietary kernel modules have been removed"*,
+615 installation guide §4.1), so it can no longer be used for the driver.
+
+```bash
+# 1. Force the closed module BEFORE installing. akmod-nvidia ships both
+#    flavours but picks one at build time: its nvidia-kmod-noopen-checks
+#    script switches to the open module for every Turing+ GPU (RTX 20xx+).
+echo '%_without_kmod_nvidia_detect 1' | sudo tee /etc/rpm/macros.nvidia-kmod-closed
+
+# 2. Driver + CUDA userspace (libcuda, nvidia-smi, nvidia-persistenced)
+sudo dnf install -y "kernel-devel-$(uname -r)" akmod-nvidia xorg-x11-drv-nvidia-cuda
+
+# 3. Build for every installed kernel, then install the RPM akmods produced.
+#    akmods can print "Successful" while dnf answered "available but not
+#    installed", and a rebuilt kmod has the same version as an existing one.
+for k in $(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n'); do
+    sudo akmods --force --rebuild --akmod nvidia --kernels "$k"
+    sudo dnf reinstall -y /var/cache/akmods/nvidia/kmod-nvidia-"$k"-*.rpm \
+      || sudo dnf install -y /var/cache/akmods/nvidia/kmod-nvidia-"$k"-*.rpm
+done
+
+# 4. Check: must print "NVIDIA" (closed), not "Dual MIT/GPL" (open)
+modinfo -F license /lib/modules/$(uname -r)/extra/nvidia/nvidia.ko*
+```
+
+A closed kmod RPM weighs ~88 MB, an open one ~10 MB (the closed one carries
+NVIDIA's binary blob).
+
+**CUDA toolkit** (`nvcc`, needed by `egpu-stress.sh install` together with
+`cmake`): take it from NVIDIA's repo, with its driver packages excluded so it
+cannot pull a conflicting driver:
 
 ```bash
 sudo dnf config-manager addrepo --from-repofile=https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
-sudo dnf install -y nvidia-driver-cuda nvidia-persistenced cuda-toolkit
+sudo dnf config-manager setopt "cuda-fedora$(rpm -E %fedora)-x86_64.excludepkgs=nvidia-*,kmod-nvidia*,dkms-nvidia*,libnvidia*,xorg-x11-nvidia*"
+sudo dnf install -y cuda-toolkit cmake
 ```
 
-If you previously installed RPM Fusion NVIDIA packages, remove them to avoid conflicts:
-```bash
-sudo dnf remove -y akmod-nvidia 'xorg-x11-drv-nvidia*'
-```
+Notes:
+- RPM Fusion always installs the display package `xorg-x11-drv-nvidia` (it
+  provides `nvidia-kmod-common`, which the kmods require). Compute-only mode
+  comes from the `nvidia-drm` / `nvidia-modeset` blacklist that
+  `setup-compute.sh` installs, not from leaving that package out.
+- `nvidia-settings` is a hard dependency too, and GNOME autostarts it at every
+  login (it fails without the eGPU). Hide it per user with
+  `~/.config/autostart/nvidia-settings-user.desktop` containing `Hidden=true`.
+- Disable `nvidia-powerd` (it crashes on a TB/USB4 eGPU):
+  `sudo systemctl disable --now nvidia-powerd`.
+- Coming from NVIDIA's CUDA repo driver? Remove its driver packages first
+  (`nvidia-driver*`, `kmod-nvidia*`, `libnvidia*`).
 
 ## Ubuntu 24.04+
 

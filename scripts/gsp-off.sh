@@ -10,14 +10,18 @@
 # IMPORTANT CAVEATS — read before enabling:
 #
 # 1. Only works with the PROPRIETARY (closed) NVIDIA kernel module
-#    (`kmod-nvidia-dkms` or distro equivalent). The OPEN module
-#    (`kmod-nvidia-open-dkms`) ignores this parameter — GSP is mandatory
-#    there. The script detects which driver is loaded and warns if it
-#    can't take effect.
+#    (`akmod-nvidia` on Fedora / RPM Fusion, `nvidia-dkms` on Arch). The OPEN
+#    module ignores this parameter — GSP is mandatory there. The script
+#    detects which driver is loaded and warns if it can't take effect.
+#    Since branch 615, NVIDIA's own CUDA repositories ship the open module
+#    only; RPM Fusion still ships the closed one but builds open for
+#    Turing+ unless told otherwise (see the 'enable' warning).
 #
-# 2. NVIDIA marked this option as deprecated for Turing+. It still works in
-#    driver 610 series but is scheduled for removal in a future release.
-#    Treat as a tactical workaround, not a long-term fix.
+# 2. NVIDIA marked this option as deprecated for Turing+. Verified working
+#    on the closed 615.71.09 module (RTX 3090, 2026-10-09: EnableGpuFirmware=0,
+#    nvidia-smi reports GSP Firmware Version N/A), but it is scheduled for
+#    removal in a future release. Treat as a tactical workaround, not a
+#    long-term fix.
 #
 # 3. Without GSP, clock/power management runs CPU-side. Slight perf hit on
 #    sustained compute. Marginal for Ollama / inference; more visible for
@@ -84,7 +88,7 @@ do_status() {
     local flavor; flavor=$(detect_driver_flavor)
     printf "${B}NVIDIA driver flavor:${N} %s\n" "$flavor"
     case "$flavor" in
-        open)    warn "open kmod ignores NVreg_EnableGpuFirmware. GSP-off has no effect on this driver. Switch to kmod-nvidia-dkms (closed) to use it." ;;
+        open)    warn "open kmod ignores NVreg_EnableGpuFirmware. GSP-off has no effect on this driver. Switch to the closed kmod (see 'gsp-off.sh enable' for per-distro steps)." ;;
         closed)  ok "closed kmod respects NVreg_EnableGpuFirmware." ;;
         none)    warn "no NVIDIA kernel module installed yet." ;;
     esac
@@ -115,8 +119,14 @@ do_enable() {
             warn "The currently installed NVIDIA kmod is the OPEN variant."
             warn "It will IGNORE NVreg_EnableGpuFirmware=0 (GSP is mandatory there)."
             warn "Switch to the closed driver first:"
-            warn "    Fedora (NVIDIA CUDA repo): sudo dnf swap kmod-nvidia-open-dkms kmod-nvidia-latest-dkms"
-            warn "    Fedora (RPM Fusion):       sudo dnf swap akmod-nvidia-open akmod-nvidia"
+            warn "    Fedora (RPM Fusion): akmod-nvidia picks open vs closed AT BUILD TIME and"
+            warn "      chooses OPEN for Turing+ GPUs (nvidia-kmod-noopen-checks). Force closed:"
+            warn "        echo '%_without_kmod_nvidia_detect 1' | sudo tee /etc/rpm/macros.nvidia-kmod-closed"
+            warn "        sudo dnf swap akmod-nvidia-open akmod-nvidia   # if the -open package is installed"
+            warn "        sudo akmods --force --rebuild --akmod nvidia --kernels \$(uname -r)"
+            warn "      then reinstall the rebuilt RPM (akmods may report Successful without"
+            warn "      installing it): sudo dnf reinstall /var/cache/akmods/nvidia/kmod-nvidia-\$(uname -r)-*.rpm"
+            warn "    Fedora (NVIDIA CUDA repo): no closed module since branch 615 — use RPM Fusion."
             warn "    Ubuntu:                    sudo apt install nvidia-dkms-XXX  (specific version)"
             warn "    Arch:                      sudo pacman -S nvidia-dkms  (instead of nvidia-open-dkms)"
             warn "Proceeding to write the config anyway so it takes effect after the swap."
