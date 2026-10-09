@@ -164,7 +164,7 @@ EOF
 
     echo ""
     ok "GSP-off enabled. ${B}Reboot${N} for the change to take effect."
-    echo "  After reboot, verify with: cat /sys/module/nvidia/parameters/EnableGpuFirmware"
+    echo "  After reboot, verify with: grep EnableGpuFirmware /proc/driver/nvidia/params"
     echo "  → should print 0 if active (i.e. closed driver + this file took effect)"
 }
 

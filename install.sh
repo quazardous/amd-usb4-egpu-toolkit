@@ -35,6 +35,9 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 # follow the system locale and mix with this script's English messages.
 # Inherited by the sub-scripts; sudo keeps LC_* (Fedora's default env_keep).
 export LC_ALL=C.UTF-8
+# Tells setup-compute.sh / gsp-off.sh not to print their standalone
+# "next steps": this script does those steps and prints its own.
+export EGPU_TOOLKIT_INSTALLER=1
 
 ASSUME_YES=false
 WITH_CUDA=false
@@ -71,7 +74,10 @@ if [[ "${ID:-}" != fedora ]]; then
     exit 1
 fi
 
-if lspci -d 10de: 2>/dev/null | grep -qE 'VGA|3D'; then
+# Capture, then test: under pipefail, "cmd | grep -q" turns a MATCH into a
+# failure (grep exits early, cmd dies of SIGPIPE, the pipeline fails).
+nv_gpus=$(lspci -d 10de: 2>/dev/null || true)
+if grep -qE 'VGA|3D' <<<"$nv_gpus"; then
     warn "An NVIDIA GPU is on the bus. Install with the eGPU UNPLUGGED (power off, cable out)."
     confirm "Continue anyway?" || exit 1
 fi
@@ -153,7 +159,8 @@ else
 fi
 
 # ---------- 7. kernel arg, services, autostart ----------
-if ! sudo grubby --info=DEFAULT | grep -q 'nvidia-drm.modeset=0'; then
+kargs=$(sudo grubby --info=DEFAULT)
+if ! grep -q 'nvidia-drm.modeset=0' <<<"$kargs"; then
     sudo grubby --update-kernel=ALL --args="nvidia-drm.modeset=0"
     ok "nvidia-drm.modeset=0 added to the kernel command line"
 fi
@@ -171,7 +178,8 @@ printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=NVIDIA X Server Setting
 # ---------- 8. optional CUDA toolkit ----------
 if $WITH_CUDA; then
     repo="cuda-fedora$(rpm -E %fedora)-x86_64"
-    if ! dnf repolist --all 2>/dev/null | grep -q "^$repo"; then
+    repos=$(dnf repolist --all 2>/dev/null || true)
+    if ! grep -q "^$repo" <<<"$repos" && [[ ! -f "/etc/yum.repos.d/cuda-fedora$(rpm -E %fedora).repo" ]]; then
         sudo dnf config-manager addrepo --from-repofile="https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo"
     fi
     # The driver comes from RPM Fusion: keep NVIDIA's repo from providing one.

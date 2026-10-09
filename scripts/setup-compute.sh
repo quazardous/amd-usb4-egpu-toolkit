@@ -212,14 +212,16 @@ EOF
 
     regen_initramfs
 
-    print_cmdline_guidance
-
     echo ""
     ok "Setup complete."
+    # Called from install.sh, which does the remaining steps itself.
+    [[ -n "${EGPU_TOOLKIT_INSTALLER:-}" ]] && return 0
+
+    print_cmdline_guidance
     echo "Next steps:"
-    echo "  1. install nvidia-driver-cuda + cuda-toolkit + nvidia-persistenced (see README per-distro)"
+    echo "  1. install the NVIDIA driver (Fedora: ./install.sh does everything; others: docs/install.md)"
     echo "  2. add the kernel cmdline arg above and reboot"
-    echo "  3. plug eGPU (cable first, then power on the enclosure)"
+    echo "  3. plug eGPU (enclosure off, cable in, then power on the enclosure)"
     echo "  4. ./scripts/egpu-diag.sh  →  verdict should be OK-Gen4x4 (or OK-Gen3x4 on TB3)"
 }
 
