@@ -1,0 +1,13 @@
+.egpu-indicator-warning {
+    color: #f6d32d;
+}
+.egpu-indicator-ejected {
+    color: #57e389;
+}
+.egpu-indicator-dim {
+    color: alpha(#ffffff, 0.6);
+}
+.egpu-indicator-detail {
+    font-size: 0.9em;
+    font-feature-settings: "tnum";
+}

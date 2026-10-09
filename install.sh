@@ -18,12 +18,14 @@
 #   7. adds nvidia-drm.modeset=0, enables nvidia-persistenced, disables
 #      nvidia-powerd, hides the nvidia-settings login autostart
 #   8. optionally installs cuda-toolkit + cmake (for scripts/egpu-stress.sh)
+#   9. optionally links the eGPU Indicator GNOME extension (panel status + eject)
 #
 # Usage:
 #   ./install.sh                     # interactive
 #   ./install.sh --yes               # no questions
 #   ./install.sh --with-cuda-toolkit # also nvcc + cmake (stress tests)
 #   ./install.sh --keep-gsp          # leave the GSP on (open module allowed)
+#   ./install.sh --with-gnome-extension  # panel indicator with status + eject
 #
 # Run as your normal user (it calls sudo itself), with the eGPU UNPLUGGED.
 # Reboot afterwards. Details and rationale: docs/install.md.
@@ -41,13 +43,15 @@ export EGPU_TOOLKIT_INSTALLER=1
 
 ASSUME_YES=false
 WITH_CUDA=false
+WITH_EXT=false
 KEEP_GSP=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -y|--yes)            ASSUME_YES=true; shift ;;
         --with-cuda-toolkit) WITH_CUDA=true; shift ;;
         --keep-gsp)          KEEP_GSP=true; shift ;;
-        -h|--help)           sed -n '2,28p' "$0"; exit 0 ;;
+        --with-gnome-extension) WITH_EXT=true; shift ;;
+        -h|--help)           sed -n '2,30p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1 (see --help)" >&2; exit 1 ;;
     esac
 done
@@ -186,6 +190,16 @@ if $WITH_CUDA; then
     sudo dnf config-manager setopt "$repo.excludepkgs=nvidia-*,kmod-nvidia*,dkms-nvidia*,libnvidia*,xorg-x11-nvidia*"
     sudo dnf install -y cuda-toolkit cmake
     ok "cuda-toolkit installed (add /usr/local/cuda/bin to PATH)"
+fi
+
+# ---------- 9. optional GNOME extension ----------
+if $WITH_EXT; then
+    uuid=egpu-indicator@quazardous.github.io
+    mkdir -p "$HOME/.local/share/gnome-shell/extensions"
+    # A symlink, so a git pull updates the extension.
+    ln -sfn "$REPO_DIR/gnome-extension/$uuid" "$HOME/.local/share/gnome-shell/extensions/$uuid"
+    gnome-extensions enable "$uuid" 2>/dev/null || true
+    ok "eGPU Indicator extension linked and enabled (log out and back in on Wayland)"
 fi
 
 echo ""

@@ -189,6 +189,11 @@ EOF
     write_root_file "$REPO_DIR/scripts/shutdown-helper.sh" \
                     /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
     sudo chmod +x /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+    # Eject helper at a fixed root-owned path: the GNOME extension runs it
+    # through pkexec, which must not point at a user-writable file.
+    write_root_file "$REPO_DIR/scripts/egpu-eject.sh" \
+                    /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
+    sudo chmod 0755 /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
     write_root_file "$REPO_DIR/systemd/nvidia-egpu-shutdown.service" \
                     /etc/systemd/system/nvidia-egpu-shutdown.service
 
@@ -236,6 +241,7 @@ do_uninstall() {
     fi
     remove_if_present /etc/systemd/system/nvidia-egpu-shutdown.service
     remove_if_present /usr/local/lib/amd-usb4-egpu-toolkit/shutdown-helper.sh
+    remove_if_present /usr/local/lib/amd-usb4-egpu-toolkit/egpu-eject.sh
     sudo rmdir /usr/local/lib/amd-usb4-egpu-toolkit 2>/dev/null || true
     remove_if_present /etc/modprobe.d/blacklist-nouveau.conf
     remove_if_present /etc/modprobe.d/nvidia-compute-only.conf

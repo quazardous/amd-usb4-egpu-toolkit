@@ -31,6 +31,7 @@ scripts/
   setup-compute.sh    distro-agnostic config (modprobe + udev + drop-in + initramfs)
   shutdown-helper.sh  shutdown-time eGPU teardown (installed in /usr/local/lib)
   gsp-off.sh          opt-in workaround: disable NVIDIA GSP firmware (closed driver only)
+gnome-extension/      eGPU Indicator: panel status + eject (GNOME 50)
 udev/                 start/stop nvidia-persistenced on driver bind/unbind, log GPU link state
 systemd/              eGPU-aware drop-in + shutdown hook
 docs/                 detailed install, procedure, troubleshooting, references

@@ -34,7 +34,9 @@ enclosure **off** → cable in → enclosure **on**, and check with
 `./scripts/egpu-diag.sh` (verdict `OK-Gen4x4`) before `nvidia-smi`.
 Before unplugging: `./scripts/egpu-eject.sh`.
 
-Add `--with-cuda-toolkit` for `nvcc` and the stress tests. Other distros:
+Add `--with-cuda-toolkit` for `nvcc` and the stress tests, `--with-gnome-extension`
+for a panel indicator with status and a one-click eject
+([gnome-extension/](gnome-extension/README.md)). Other distros:
 [docs/install.md](docs/install.md).
 
 ## More

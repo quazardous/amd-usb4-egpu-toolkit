@@ -1,0 +1,8 @@
+{
+  "uuid": "egpu-indicator@quazardous.github.io",
+  "name": "eGPU Indicator",
+  "description": "Status, usage and safe eject for an NVIDIA eGPU on a USB4 / Thunderbolt laptop. Companion of amd-usb4-egpu-toolkit.",
+  "shell-version": ["50"],
+  "url": "https://github.com/quazardous/amd-usb4-egpu-toolkit",
+  "version-name": "0.1"
+}
