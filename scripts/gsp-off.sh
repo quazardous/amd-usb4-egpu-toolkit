@@ -102,10 +102,17 @@ do_status() {
     fi
     echo ""
 
-    # Check runtime state via /sys (only meaningful if module is currently loaded)
-    local rt=/sys/module/nvidia/parameters/EnableGpuFirmware
-    if [[ -f "$rt" ]]; then
-        printf "${B}Runtime EnableGpuFirmware:${N} %s\n" "$(cat "$rt")"
+    # Runtime state, only meaningful while the module is loaded. The closed
+    # module exposes NVreg_* options in /proc/driver/nvidia/params, not in
+    # /sys/module/nvidia/parameters/.
+    local rt=""
+    if [[ -r /proc/driver/nvidia/params ]]; then
+        rt=$(awk -F': ' '$1=="EnableGpuFirmware"{print $2; exit}' /proc/driver/nvidia/params)
+    elif [[ -f /sys/module/nvidia/parameters/EnableGpuFirmware ]]; then
+        rt=$(cat /sys/module/nvidia/parameters/EnableGpuFirmware)
+    fi
+    if [[ -n "$rt" ]]; then
+        printf "${B}Runtime EnableGpuFirmware:${N} %s\n" "$rt"
     else
         printf "${B}Runtime EnableGpuFirmware:${N} (nvidia module not loaded)\n"
     fi

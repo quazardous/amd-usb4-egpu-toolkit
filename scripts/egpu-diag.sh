@@ -128,9 +128,16 @@ gsp_status() {
     # because GSP can only be turned off with the closed kmod — and that's
     # often what users tweak after hitting WPR2 / GSP-bootstrap cascades.
     local flavor; flavor=$(driver_flavor)
+    # Runtime value: the closed module does not expose its NVreg_* options
+    # under /sys/module/nvidia/parameters/ — they live in
+    # /proc/driver/nvidia/params ("EnableGpuFirmware: 0"). Checking only the
+    # sysfs path reported "off-pending" with the module loaded and GSP off.
     local rt=""
-    [[ -f /sys/module/nvidia/parameters/EnableGpuFirmware ]] \
-        && rt=$(cat /sys/module/nvidia/parameters/EnableGpuFirmware 2>/dev/null)
+    if [[ -r /proc/driver/nvidia/params ]]; then
+        rt=$(awk -F': ' '$1=="EnableGpuFirmware"{print $2; exit}' /proc/driver/nvidia/params)
+    elif [[ -f /sys/module/nvidia/parameters/EnableGpuFirmware ]]; then
+        rt=$(cat /sys/module/nvidia/parameters/EnableGpuFirmware 2>/dev/null)
+    fi
     local conf_present=false
     grep -lq 'NVreg_EnableGpuFirmware=0' /etc/modprobe.d/*.conf 2>/dev/null && conf_present=true
 
