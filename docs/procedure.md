@@ -44,7 +44,7 @@ nvidia-smi
 # → GPU listed, Persistence-M: On
 ```
 
-If `egpu-diag.sh` reports `BUG-Gen1-AMD-Phoenix`, **don't** invoke `nvidia-smi` yet — the GSP bootstrap will time out and you'll be stuck in the [NVRM cascade](troubleshooting.md#nvrm-cascade-deadlock-after-xid-79). Power‑cycle the eGPU and try again. The bug is intermittent: a second plug after a power cycle often re‑trains the link to Gen4 cleanly.
+If `egpu-diag.sh` reports `BUG-Gen1x1-AMD-Phoenix`, **don't** invoke `nvidia-smi` yet — the GSP bootstrap will time out and you'll be stuck in the [NVRM cascade](troubleshooting.md#nvrm-cascade-deadlock-after-xid-79). Power‑cycle the eGPU and try again. The bug is intermittent: a second plug after a power cycle often re‑trains the link to Gen4 cleanly.
 
 ## What the udev rule does for you
 

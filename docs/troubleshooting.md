@@ -9,7 +9,11 @@ Map your symptom to the right action. `Verdict` column refers to `./scripts/egpu
 | `nvidia-smi` shows the GPU | `OK-Gen4x4`, `Safe = YES` | All good. Work. |
 | `nvidia-smi` says "No devices found" | `OK-…`, `RmInit fail ≥ 1` | Driver lost session. Reboot or replug. Make sure `nvidia-persistenced` is `active`. |
 | `nvidia-smi` hangs (no output) | `RmInit fail ≥ 1` OR `Stuck D ≥ 1` | Don't run `nvidia-smi` again. Reboot. See [NVRM cascade](#nvrm-cascade-deadlock-after-xid-79). |
-| Link reports Gen1 ×1 | `BUG-Gen1-AMD-Phoenix` | Power‑cycle the eGPU enclosure. Try the other USB4 port if available. Re‑plug after a power cycle often gives a clean Gen4 ×4. |
+| Link reports Gen1 ×1 | `BUG-Gen1x1-AMD-Phoenix` | Power‑cycle the eGPU enclosure. Try the other USB4 port if available. Re‑plug after a power cycle often gives a clean Gen4 ×4. |
+| Kernel: `limited by 2.5 GT/s PCIe x1 link at 0000:00:0x.1` | (none — artifact) | Not the Phoenix bug. On AMD USB4 the host tunnel port is virtual and always advertises Gen1 ×1, so the kernel prints this on every enumeration. Trust `egpu-diag.sh`, which reads the GPU's own link. Measured 3.57 GiB/s through a port "limited to 2 Gb/s". |
+| `nvidia-persistenced` inactive right after plug | `persistenced: inactive` | Old udev rule fired on PCI `add`, before the driver binds and before `/dev/nvidia0` exists (RPM Fusion creates it lazily). Re‑run `setup-compute.sh`: the rule now fires on `bind` and the drop-in creates the nodes. |
+| `nouveau ... gsp: init failed, -110` then `probe ... failed` | (GPU without driver) | nouveau's GSP bootstrap timed out over the tunnel. nouveau cannot run Ampere+ without GSP; use the closed NVIDIA driver + `gsp-off.sh`. |
+| `modinfo -F license nvidia` = `Dual MIT/GPL` after installing `akmod-nvidia` | (open module built) | RPM Fusion picks the flavour at build time and chooses open for Turing+. Force closed with `%_without_kmod_nvidia_detect 1` and rebuild — see [install.md](install.md#fedora-44). |
 | Display freezes when eGPU plugged | (check `lsmod \| grep nvidia-drm`) | `nvidia-drm` is loaded. Re‑run `setup-compute.sh` and reboot — the blacklist must be in place. |
 | `nvidia-persistenced` keeps failing | `persistenced: inactive` | The udev rule should auto‑start it on plug. If it doesn't, check `journalctl -u nvidia-persistenced` and `udevadm monitor` while plugging. |
 | Whole system freezes when unplugging eGPU | (cascade) | Held NVRM spinlock. Hard reset. If it happens repeatedly, you may have nouveau loading — ensure blacklist + initramfs regen. |

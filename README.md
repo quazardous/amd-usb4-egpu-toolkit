@@ -4,7 +4,7 @@ NVIDIA eGPU as a **CUDA‑only compute accelerator** on a Linux laptop with an *
 
 The eGPU stays headless; the laptop's iGPU keeps driving the screen.
 
-**Validated on:** Lenovo ThinkPad T14s Gen 5 AMD (Ryzen 7 PRO 8840HS, Hawk Point) + Razer Core X V2 (USB4) + NVIDIA RTX 3090.
+**Validated on:** Lenovo ThinkPad P14s Gen 5 AMD (Ryzen 7 PRO 8840HS, Hawk Point) + Razer Core X V2 (USB4) + NVIDIA RTX 3090 — Fedora 44, kernel 7.2.9, closed driver 615.71.09 with GSP off (2026-10-09): link held PCIe Gen4 x4 through a 120 s `gpu-burn`, 3.57 GiB/s host↔device.
 
 ## What this fixes
 
@@ -20,7 +20,7 @@ Three pain points that other guides cover poorly — see [docs/why.md](docs/why.
 |---|---|
 | Laptop SoC | AMD Ryzen 7xxx/8xxx series with USB4 (Phoenix, Hawk Point, Strix) |
 | eGPU enclosure | Razer Core X V2 (USB4), Razer Core X (TB3), Aorus / Akitio / similar |
-| eGPU GPU | NVIDIA RTX 30xx / 40xx (open driver), workstation A‑series |
+| eGPU GPU | NVIDIA RTX 30xx / 40xx, workstation A‑series (**closed** driver if you use `gsp-off.sh`) |
 | Distro | Any with systemd + udev (Fedora 44+, Ubuntu 24.04+, Arch) |
 | Kernel | 6.6+ recommended |
 
@@ -38,7 +38,7 @@ scripts/
   setup-compute.sh    distro-agnostic config (modprobe + udev + drop-in + initramfs)
   shutdown-helper.sh  shutdown-time eGPU teardown (installed in /usr/local/lib)
   gsp-off.sh          opt-in workaround: disable NVIDIA GSP firmware (closed driver only)
-udev/                 start/stop nvidia-persistenced on PCI add/remove
+udev/                 start/stop nvidia-persistenced on driver bind/unbind, log GPU link state
 systemd/              eGPU-aware drop-in + shutdown hook
 docs/                 detailed install, procedure, troubleshooting, references
 ```
@@ -47,9 +47,9 @@ docs/                 detailed install, procedure, troubleshooting, references
 
 ```bash
 # 1. Install packages (per-distro details: docs/install.md)
-#    Fedora:
-sudo dnf config-manager addrepo --from-repofile=https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/x86_64/cuda-fedora$(rpm -E %fedora).repo
-sudo dnf install -y nvidia-driver-cuda nvidia-persistenced cuda-toolkit
+#    Fedora:    RPM Fusion akmod-nvidia, CLOSED module forced — see docs/install.md
+#               (NVIDIA's CUDA repo ships the open module only since branch 615,
+#               and RPM Fusion builds open for Turing+ unless told otherwise)
 #    Ubuntu:    sudo apt install nvidia-driver-cuda nvidia-persistenced cuda-toolkit
 #    Arch:      sudo pacman -S nvidia-open nvidia-utils nvidia-persistenced cuda
 
@@ -92,7 +92,7 @@ nvidia-smi
 # → your GPU listed, Persistence-M: On
 ```
 
-If `egpu-diag.sh` reports **`BUG-Gen1-AMD-Phoenix`**, do NOT call `nvidia-smi` (cascade risk). Power‑cycle the enclosure and re‑plug — the bug is intermittent and usually clears on a second attempt.
+If `egpu-diag.sh` reports **`BUG-Gen1x1-AMD-Phoenix`**, do NOT call `nvidia-smi` (cascade risk). Power‑cycle the enclosure and re‑plug — the bug is intermittent and usually clears on a second attempt.
 
 Full procedure, full verification, benchmark reference numbers: [docs/procedure.md](docs/procedure.md).
 
@@ -113,8 +113,12 @@ Common scenarios and how to fix them — full tree + glossary in [docs/troublesh
 | `nvidia-smi` hangs (no output) | **DON'T** run it again. Reboot. See the NVRM cascade explanation. |
 | `nvidia-smi` says "No devices found" while the eGPU is plugged | Driver lost session. Check `nvidia-persistenced` is `active`. Reboot if needed. |
 | Display freezes when eGPU is plugged | `nvidia-drm` is loaded. Re‑run `setup-compute.sh`, reboot. |
-| Verdict reports `BUG-Gen1-AMD-Phoenix` | Phoenix x1‑Gen1 bug fired. Power‑cycle the enclosure and re‑plug. |
+| Verdict reports `BUG-Gen1x1-AMD-Phoenix` | Phoenix x1‑Gen1 bug fired. Power‑cycle the enclosure and re‑plug. |
 | `nvidia-persistenced` keeps failing at boot | Drop-in missing. Re‑run `setup-compute.sh`, reboot. |
+| `nvidia-persistenced` stays `inactive` after plugging | Old udev rule (fired on PCI add, before the driver binds). Re‑run `setup-compute.sh`. |
+| Kernel prints `limited by 2.5 GT/s PCIe x1 link at 0000:00:0x.1` | **Not** the Phoenix bug: the AMD USB4 tunnel port is virtual and always reports Gen1 x1. Trust `egpu-diag.sh` (the GPU's own link). |
+| `nouveau ... gsp: init failed, -110` | nouveau's GSP bootstrap timed out. Use the closed NVIDIA driver + `gsp-off.sh` (nouveau cannot run Ampere+ without GSP). |
+| Closed module expected but `modinfo -F license nvidia` says `Dual MIT/GPL` | RPM Fusion built the open module. See the Fedora section of docs/install.md. |
 | Preflight reports `nvidia-persistenced failed N time(s) since boot` | Stale journal traces from before the fix. Reboot to clear the count. |
 | Shutdown / poweroff hangs at the Fedora spinner | `nvidia-egpu-shutdown.service` missing or disabled. Re‑run `setup-compute.sh` (it installs + enables the hook that cleanly unloads nvidia.ko before TB teardown). |
 
